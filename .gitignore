@@ -52,3 +52,7 @@ downloads/
 # Logs
 logs/
 
+.vscode 
+.ipynb_checkpoints
+*.ipynb
+.DS_Store

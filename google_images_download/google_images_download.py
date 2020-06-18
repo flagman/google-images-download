@@ -322,7 +322,7 @@ class googleimagesdownload:
         print("completed ====> " + image_name.encode('raw_unicode_escape').decode('utf-8'))
         return
 
-    def similar_images(self,similar_images):
+    def similar_images(self,similar_images, params):
         version = (3, 0)
         cur_version = sys.version_info
         if cur_version >= version:  # If the Current Version of Python is 3.0 or above
@@ -341,10 +341,16 @@ class googleimagesdownload:
                 newurl = "https://www.google.com/search?tbs=sbi:" + urll + "&site=search&sa=X"
                 req2 = urllib.request.Request(newurl, headers=headers)
                 resp2 = urllib.request.urlopen(req2)
-                l3 = content.find('/search?sa=X&amp;q=')
-                l4 = content.find(';', l3 + 19)
-                urll2 = content[l3 + 19:l4]
-                return urll2
+                content2 = str(resp2.read())
+                l3 = content2.rfind("/search?sa=X&amp;tbs=simg:")
+                l4 = content2.find("\">", l3)
+                similar_uri = content2[l3:l4]
+                newurl = "https://www.google.com" + similar_uri
+                newurl = newurl.replace("&amp;", "&")
+                newurl = newurl.replace("&tbs=", params+',')
+                l5 = newurl.find("q=")
+                l6 = newurl.find("&", l5)
+                return newurl[:l5+2]+newurl[l6:]                
             except:
                 return "Cloud not connect to Google Images endpoint"
         else:  # If the Current Version of Python is 2.x
@@ -426,8 +432,8 @@ class googleimagesdownload:
             url = url
         elif similar_images:
             print(similar_images)
-            keywordem = self.similar_images(similar_images)
-            url = 'https://www.google.com/search?q=' + keywordem + '&espv=2&biw=1366&bih=667&site=webhp&source=lnms&tbm=isch&sa=X&ei=XosDVaCXD8TasATItgE&ved=0CAcQ_AUoAg'
+            url = self.similar_images(similar_images, params)
+            # url = 'https://www.google.com/search?q=' + keywordem + '&espv=2&biw=1366&bih=667&site=webhp&source=lnms&tbm=isch&sa=X&ei=XosDVaCXD8TasATItgE&ved=0CAcQ_AUoAg'
         elif specific_site:
             url = 'https://www.google.com/search?q=' + quote(
                 search_term.encode('utf-8')) + '&as_sitesearch=' + specific_site + '&espv=2&biw=1366&bih=667&site=webhp&source=lnms&tbm=isch' + params + '&sa=X&ei=XosDVaCXD8TasATItgE&ved=0CAcQ_AUoAg'
@@ -438,7 +444,6 @@ class googleimagesdownload:
         #safe search check
         if safe_search:
             url = url + safe_search_string
-
         return url
 
 
@@ -600,20 +605,21 @@ class googleimagesdownload:
                 data = response.read()
                 response.close()
 
-                extensions = [".jpg", ".jpeg", ".gif", ".png", ".bmp", ".svg", ".webp", ".ico"]
-                # keep everything after the last '/'
+                extensions = [".jpg", ".jpeg", ".gif", ".png", ".bmp", ".svg", ".webp", ".ico", ".jpg64"]
+                # keep everything after the last '/'                            
                 image_name = str(image_url[(image_url.rfind('/')) + 1:])
                 if format:
                     if not image_format or image_format != format:
-                        download_status = 'fail'
-                        download_message = "Wrong image format returned. Skipping..."
+                        download_status = 'fail'        
+                        download_message = "Wrong image format returned {}. Skipping...".format(format)
                         return_image_name = ''
                         absolute_path = ''
                         return download_status, download_message, return_image_name, absolute_path
 
-                if image_format == "" or not image_format or "." + image_format not in extensions:
+                if image_format == "" or not image_format or image_format not in extensions:
                     download_status = 'fail'
-                    download_message = "Invalid or missing image format. Skipping..."
+                    download_message = "Invalid or missing image format ({}). Skipping...".format(format)
+                    breakpoint()
                     return_image_name = ''
                     absolute_path = ''
                     return download_status, download_message, return_image_name, absolute_path
@@ -709,9 +715,9 @@ class googleimagesdownload:
 
         return download_status,download_message,return_image_name,absolute_path
 
-
+    
     # Finding 'Next Image' from the given raw page
-    def _get_next_item(self,s):
+    def _get_next_item(self,s):        
         start_line = s.find('rg_meta notranslate')
         if start_line == -1:  # If no links are found then give an error!
             end_quote = 0
@@ -746,47 +752,56 @@ class googleimagesdownload:
         errorCount = 0
         i = 0
         count = 1
-        while count < limit+1:
-            object, end_content = self._get_next_item(page)
-            if object == "no_links":
-                break
-            elif object == "":
-                page = page[end_content:]
-            elif arguments['offset'] and count < int(arguments['offset']):
-                    count += 1
-                    page = page[end_content:]
-            else:
-                #format the item for readability
-                object = self.format_object(object)
-                if arguments['metadata']:
-                    if not arguments["silent_mode"]:
-                        print("\nImage Metadata: " + str(object))
+        marker = ', data:'
+        l1 = page.rfind(marker)
+        l2 = page.find('});<', l1)
+        from urllib.parse import unquote
+        import json 
+        quoted = page[l1+len(marker):l2-2]        
+        unquoted = str(bytes(quoted, 'utf-8').decode('unicode_escape'))    
+        grid = json.loads(unquoted)        
+        
+        result = []
 
-                #download the images
-                download_status,download_message,return_image_name,absolute_path = self.download_image(object['image_link'],object['image_format'],main_directory,dir_name,count,arguments['print_urls'],arguments['socket_timeout'],arguments['prefix'],arguments['print_size'],arguments['no_numbering'],arguments['no_download'],arguments['save_source'],object['image_source'],arguments["silent_mode"],arguments["thumbnail_only"],arguments['format'],arguments['ignore_urls'])
+        for item in grid: 
+            if not item or len(item) != 1: continue
+            item = item[0]
+            for subitem in item: 
+                if subitem and type(subitem) is list and subitem[0] == 'GRID_STATE0':
+                    result = subitem
+        try:
+            items = result[2]
+            output = [item[1][3][0] for item in items]
+        except IndexError: 
+            raise("Error")        
+        from urllib.parse import urlparse
+        from pathlib import Path
+
+        if len(output) < limit: 
+            limit = count;  
+
+        while count < limit:
+            url = output[count]      
+            format =  ".jpg"
+            if arguments['metadata']:
                 if not arguments["silent_mode"]:
-                    print(download_message)
-                if download_status == "success":
+                    print("\nImage Metadata: " + str(object))
+            #download the images
+            download_status,download_message,return_image_name,absolute_path = self.download_image(url,format,main_directory,dir_name,count,arguments['print_urls'],arguments['socket_timeout'],arguments['prefix'],arguments['print_size'],arguments['no_numbering'],arguments['no_download'],arguments['save_source'],url,arguments["silent_mode"],arguments["thumbnail_only"],arguments['format'],arguments['ignore_urls'])
+            if not arguments["silent_mode"]:
+                print(download_message)
+            count += 1
 
-                    # download image_thumbnails
-                    if arguments['thumbnail'] or arguments["thumbnail_only"]:
-                        download_status, download_message_thumbnail = self.download_image_thumbnail(object['image_thumbnail_url'],main_directory,dir_name,return_image_name,arguments['print_urls'],arguments['socket_timeout'],arguments['print_size'],arguments['no_download'],arguments['save_source'],object['image_source'],arguments['ignore_urls'])
-                        if not arguments["silent_mode"]:
-                            print(download_message_thumbnail)
+            if download_status == "success":
+                abs_path.append(absolute_path)
+            else:                
+                errorCount += 1
 
-                    count += 1
-                    object['image_filename'] = return_image_name
-                    items.append(object)  # Append all the links in the list named 'Links'
-                    abs_path.append(absolute_path)
-                else:
-                    errorCount += 1
-
-                #delay param
-                if arguments['delay']:
-                    time.sleep(int(arguments['delay']))
-
-                page = page[end_content:]
-            i += 1
+            #delay param
+            if arguments['delay']:
+                time.sleep(int(arguments['delay']))
+            
+        i += 1
         if count < limit:
             print("\n\nUnfortunately all " + str(
                 limit) + " could not be downloaded because some images were not downloadable. " + str(
@@ -938,12 +953,10 @@ class googleimagesdownload:
                     params = self.build_url_parameters(arguments)     #building URL with params
 
                     url = self.build_search_url(search_term,params,arguments['url'],arguments['similar_images'],arguments['specific_site'],arguments['safe_search'])      #building main search url
-
                     if limit < 101:
                         raw_html = self.download_page(url)  # download page
                     else:
-                        raw_html = self.download_extended_page(url,arguments['chromedriver'])
-
+                        raw_html = self.download_extended_page(url,arguments['chromedriver'])                    
                     if not arguments["silent_mode"]:
                         if arguments['no_download']:
                             print("Getting URLs without downloading images...")
