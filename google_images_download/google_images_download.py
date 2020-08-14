@@ -322,7 +322,7 @@ class googleimagesdownload:
         print("completed ====> " + image_name.encode('raw_unicode_escape').decode('utf-8'))
         return
 
-    def similar_images(self,similar_images, params):
+    def similar_images(self,similar_images, params, keywords):
         version = (3, 0)
         cur_version = sys.version_info
         if cur_version >= version:  # If the Current Version of Python is 3.0 or above
@@ -349,7 +349,9 @@ class googleimagesdownload:
                 newurl = newurl.replace("&amp;", "&")
                 newurl = newurl.replace("&tbs=", params+',')
                 l5 = newurl.find("q=")
-                l6 = newurl.find("&", l5)
+                l6 = newurl.find("&", l5)                
+                if keywords:
+                    return newurl[:l5+2]+ quote(keywords)+newurl[l6:]                
                 return newurl[:l5+2]+newurl[l6:]                
             except:
                 return "Cloud not connect to Google Images endpoint"
@@ -424,15 +426,15 @@ class googleimagesdownload:
 
 
     #building main search URL
-    def build_search_url(self,search_term,params,url,similar_images,specific_site,safe_search):
+    def build_search_url(self,search_term,params,url,similar_images,specific_site,safe_search, keywords=None):
         #check safe_search
         safe_search_string = "&safe=active"
         # check the args and choose the URL
         if url:
             url = url
         elif similar_images:
-            print(similar_images)
-            url = self.similar_images(similar_images, params)
+            print(similar_images)            
+            url = self.similar_images(similar_images, params, keywords)
             # url = 'https://www.google.com/search?q=' + keywordem + '&espv=2&biw=1366&bih=667&site=webhp&source=lnms&tbm=isch&sa=X&ei=XosDVaCXD8TasATItgE&ved=0CAcQ_AUoAg'
         elif specific_site:
             url = 'https://www.google.com/search?q=' + quote(
@@ -952,7 +954,7 @@ class googleimagesdownload:
 
                     params = self.build_url_parameters(arguments)     #building URL with params
 
-                    url = self.build_search_url(search_term,params,arguments['url'],arguments['similar_images'],arguments['specific_site'],arguments['safe_search'])      #building main search url
+                    url = self.build_search_url(search_term,params,arguments['url'],arguments['similar_images'],arguments['specific_site'],arguments['safe_search'], arguments['keywords'])      #building main search url
                     if limit < 101:
                         raw_html = self.download_page(url)  # download page
                     else:
