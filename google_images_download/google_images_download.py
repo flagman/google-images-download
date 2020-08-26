@@ -343,11 +343,12 @@ class googleimagesdownload:
                 resp2 = urllib.request.urlopen(req2)
                 content2 = str(resp2.read())
                 l3 = content2.rfind("/search?sa=X&amp;tbs=simg:")
-                l4 = content2.find("\">", l3)
+                l4 = content2.find("\">", l3)                
                 similar_uri = content2[l3:l4]
                 newurl = "https://www.google.com" + similar_uri
                 newurl = newurl.replace("&amp;", "&")
-                newurl = newurl.replace("&tbs=", params+',')
+                if params is not '&tbs=':
+                    newurl = newurl.replace("&tbs=", params+',')                                        
                 l5 = newurl.find("q=")
                 l6 = newurl.find("&", l5)                
                 if keywords:
@@ -754,13 +755,14 @@ class googleimagesdownload:
         errorCount = 0
         i = 0
         count = 1
-        marker = ', data:'
+        marker = ', data:'        
         l1 = page.rfind(marker)
-        l2 = page.find('});<', l1)
+        l2 = page.find('\\n, sideChannel', l1)
         from urllib.parse import unquote
         import json 
-        quoted = page[l1+len(marker):l2-2]        
+        quoted = page[l1+len(marker):l2]        
         unquoted = str(bytes(quoted, 'utf-8').decode('unicode_escape'))    
+        
         grid = json.loads(unquoted)        
         
         result = []
@@ -964,6 +966,7 @@ class googleimagesdownload:
                             print("Getting URLs without downloading images...")
                         else:
                             print("Starting Download...")
+                    print("DEBUG: Parsing %s" % url) 
                     items,errorCount,abs_path = self._get_all_items(raw_html,main_directory,dir_name,limit,arguments)    #get all image items and download images
                     paths[pky + search_keyword[i] + sky] = abs_path
 
